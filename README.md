@@ -1,62 +1,72 @@
-# Overview of the Basic AI Chatbot template
+# Overview 
+This application is a modular, custom AI assistant (chatbot) designed for Microsoft Teams. It orchestrates multiple agents *(e.g., VendorAgent, IngredientAgent,...)* using a centralized prompt engine. 
 
-This app template is built on top of [Teams AI library V2](https://aka.ms/teams-ai-library-v2).
-It showcases an agent app that responds to user questions like ChatGPT. This enables your users to talk with the AI agent in Teams.
+Built with extensibility and production-grade automation in mind, the assistant supports:
 
-## Get started with the template
+- 🔁 Multi-agent orchestration with schema-based routing
+- 🧠 Passive engagement tracking and auto-tagging
+- 🧩 Few-shot injection from high-rated examples
+- 🛠️ Azure-hosted agent integration via OpenAI and AI Projects
+- 💬 Seamless deployment into Teams via manifest.json
 
-> **Prerequisites**
->
-> To run the template in your local dev machine, you will need:
->
-> - [Node.js](https://nodejs.org/), supported versions: 20, 22.
-> - [Microsoft 365 Agents Toolkit Visual Studio Code Extension](https://aka.ms/teams-toolkit) latest version or [Microsoft 365 Agents Toolkit CLI](https://aka.ms/teamsfx-toolkit-cli).
-> - Prepare your own [Azure OpenAI](https://aka.ms/oai/access) resource.
+## Features
+- **Agent Orchestrationz** 
+Dynamically routes user queries to specialized agents using function calling and schema validation. 
+- **Feedback-Aware Prompting**
+Injects high-rated Q&A examples into the system prompt to reinforce helpful behavior.
+- **Passive Learning Loop**
+Detects implicit signals (e.g., follow-ups, “thanks”) and auto-tags responses as helpful.
+- **Memory Per Thread/User**
+Stores conversation history using scoped keys (conversationId/userId) for personalized context.
+- **Azure Integration**
+Supports OpenAI deployments and Azure-hosted agents with secure credential handling.
+- **Teams Deployment**
+Fully compatible with Microsoft Teams via manifest.json, supporting personal, team, and group chat scopes.
 
-> For local debugging using Microsoft 365 Agents Toolkit CLI, you need to do some extra steps described in [Set up your Microsoft 365 Agents Toolkit CLI for local debugging](https://aka.ms/teamsfx-cli-debugging).
+## Tech Stack
+- Node.js / TypeScript / Bicept
+- SQLite (via better-sqlite3)
+- Microsoft Teams SDK
+- Azure OpenAI + AI Projects
+- Custom feedbackStore + engagement tracker
 
-1. First, select the Microsoft 365 Agents Toolkit icon on the left in the VS Code toolbar.
-1. In file *env/.env.playground.user*, fill in your Azure OpenAI key `SECRET_AZURE_OPENAI_API_KEY=<your-key>`, endpoint `AZURE_OPENAI_ENDPOINT=<your-endpoint>`, and deployment name `AZURE_OPENAI_DEPLOYMENT_NAME=<your-deployment>`.
-1. Press F5 to start debugging which launches your app in Microsoft 365 Agents Playground using a web browser. Select `Debug in Microsoft 365 Agents Playground`.
-1. You can send any message to get a response from the agent.
+## Setup 
+- Clone the repo and install dependencies:
+`npm install`
+- Configure your .env with Azure credentials:
+`AZURE_OPENAI_KEY=...`
+`AZURE_OPENAI_ENDPOINT=...`
+`AZURE_OPENAI_DEPLOYMENT_NAME=...`
+- Sideload the app into Teams using manifest.json.
 
-**Congratulations**! You are running an application that can now interact with users in Microsoft 365 Agents Playground:
+## Architecture & Extensibilit
 
-![Basic AI Chatbot](https://github.com/user-attachments/assets/984af126-222b-4c98-9578-0744790b103a)
+- [x] Function Calling (Implemented)
+Uses OpenAI function calling to route user queries to specialized agents (VendorAgent, IngredientAgent) with schema validation and fallback logic.
+- [x] Passive Feedback Loop (Implemented)
+Tracks implicit engagement signals (e.g., follow-ups, “thanks”) and auto-tags helpful responses for prompt injection.
+    - Explicit feedback via Teams buttons (like / dislike)
+    - Implicit feedback via signal detection (thanks, follow-up)
+    - Auto-tagging and storage in SQLite
+    - Retrieval of high-rated examples for prompt injection
+- [x] Retrieval-Augmented Generation (Implemented)
+Future integration with vector-based RAG pipelines to enable grounded answers from vendor catalogs, ingredient databases, or internal documentation.
+- [ ] FastAPI Integration (Planned)
+Exposing orchestration logic via FastAPI endpoints (/ask, /feedback, /agent-status) for external systems, dashboards, or mobile clients.
 
-## What's included in the template
+## Future Enhancements
+- ✅ TTL and pruning for long-term memory
+- ✅ Agent-specific feedback tagging
+- ✅ Similarity-based retrieval for answer reuse
+- ✅ Dashboard for feedback analytics
 
-| Folder       | Contents                                            |
-| - | - |
-| `.vscode`    | VSCode files for debugging                          |
-| `appPackage` | Templates for the application manifest        |
-| `env`        | Environment files                                   |
-| `infra`      | Templates for provisioning Azure resources          |
-| `src`        | The source code for the application                 |
+## Authors
+**Reza Alirezaei**
+Dynamics 365 F&SCM Architect | Integrating AI & Cyber Security Solutions
+LinkedIn: [linkedin.com/in/rezaal](www.inkedin.com/in/rezaal)
 
-The following files can be customized and demonstrate an example implementation to get you started.
-
-| File                                 | Contents                                           |
-| - | - |
-|`src/index.ts`| Application entry point. |
-|`src/config.ts`| Defines the environment variables.|
-|`src/app/instructions.txt`| Defines the prompt.|
-|`src/app/app.ts`| Handles business logics for the Basic AI Chatbot.|
-
-The following are Microsoft 365 Agents Toolkit specific project files. You can [visit a complete guide on Github](https://github.com/OfficeDev/TeamsFx/wiki/Teams-Toolkit-Visual-Studio-Code-v5-Guide#overview) to understand how Microsoft 365 Agents Toolkit works.
-
-| File                                 | Contents                                           |
-| - | - |
-|`m365agents.yml`|This is the main Microsoft 365 Agents Toolkit project file. The project file defines two primary things:  Properties and configuration Stage definitions. |
-|`m365agents.local.yml`|This overrides `m365agents.yml` with actions that enable local execution and debugging.|
-|`m365agents.playground.yml`| This overrides `m365agents.yml` with actions that enable local execution and debugging in Microsoft 365 Agents Playground.|
-
-## Extend the template
-
-To extend the Basic AI Chatbot template with more AI capabilities, explore [Teams AI library V2 documentation](https://aka.ms/m365-agents-toolkit/teams-agent-extend-ai).
-
-## Additional information and references
-
-- [Microsoft 365 Agents Toolkit Documentations](https://docs.microsoft.com/microsoftteams/platform/toolkit/teams-toolkit-fundamentals)
-- [Microsoft 365 Agents Toolkit CLI](https://aka.ms/teamsfx-toolkit-cli)
-- [Microsoft 365 Agents Toolkit Samples](https://github.com/OfficeDev/TeamsFx-Samples)
+**Rad Eshghi**  
+Backend & Cloud Developer  
+Specializing in agent orchestration, modular SDKs, and feedback-aware systems  
+GitHub: [@Rad-tech-spec](https://github.com/your-handle)  
+LinkedIn: [linkedin.com/in/rad-eshghi](www.linkedin.com/in/rad-eshghi)
