@@ -31,7 +31,8 @@
         "@microsoft/teams.ai": "^2.0.0",
         "@microsoft/teams.apps": "^2.0.0",
         "@microsoft/teams.common": "^2.0.0",
-        "@microsoft/teams.openai": "^2.0.0"
+        "@microsoft/teams.openai": "^2.0.0",
+        "better-sqlite3": "^12.4.1"
     },
     "devDependencies": {
         "@types/node": "^20.19.22",

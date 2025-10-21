@@ -43,8 +43,16 @@
                             "description": "How can you help me?"
                         },
                         {
-                            "title": "How to develop agent for Teams?",
-                            "description": "How can I develop agents with Microsoft 365 Agents Toolkit?"
+                            "title": "Whats the price of salmon?",
+                            "description": "Get the current price of salmon."
+                        },
+                        {
+                            "title": "Show me the supply chain status",
+                            "description": "Get the latest supply chain status."
+                        },
+                        {
+                            "title": "Find ingredient alternatives",
+                            "description": "Find alternatives for a specific ingredient."
                         }
                     ]
                 }

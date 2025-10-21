@@ -12,6 +12,9 @@ import * as path from "path";
 import config from "../config";
 import { VendorAgentClient } from "../agents/vendorAgent";
 import { IngredientAgentClient } from "../agents/IngredientAgent"; // adjust path if needed
+import { FeedbackStore } from "../../storage/feedbackStore";
+const feedbackStore = new FeedbackStore();
+
 
 // Create storage for conversation history
 const storage = new LocalStorage();
@@ -87,16 +90,66 @@ try {
   console.warn("[IngredientAgent] Initialization skipped:", error);
 }
 
+// Simple signal detection function
+function detectSignal(userText: string): "thanks" | "repeat" | "follow-up" | "none" {
+  const lower = userText.toLowerCase();
+  if (lower.includes("thanks") || lower.includes("thank you")) return "thanks";
+  if (lower.includes("again") || lower.includes("same")) return "repeat";
+  if (lower.length > 20) return "follow-up"; // crude heuristic
+  return "none";
+}
+
 // Handle incoming messages
 app.on("message", async ({ send, stream, activity }) => {
   //Get conversation history
   const conversationKey = `${activity.conversation.id}/${activity.from.id}`;
   const messages = storage.get(conversationKey) || [];
 
+  // Integrate high-rated examples into instructions
+  const examples = feedbackStore.getHighRatedExamples(activity.from.id);
+  const fewShotText = examples.map(e => `Q: ${e.question}\nA: ${e.answer}`).join("\n\n");
+  const instructionsWithExamples = `${instructions}\n\n---\nHigh-rated examples:\n${fewShotText}`;
+
+  const signal = detectSignal(activity.text);
+  if (signal !== "none") {
+    feedbackStore.logEngagement({
+      thread_id: conversationKey,
+      user_id: activity.from.id,
+      user_message: activity.text,
+      bot_response: "", // optional
+      signal
+    });
+
+    if (signal === "thanks" || signal === "follow-up") {
+      const messages = storage.get(conversationKey) || [];
+      const question = [...messages].reverse().find(m => m.role === "user")?.text ?? "";
+      const answer = [...messages].reverse().find(m => m.role === "assistant")?.text ?? "";
+
+      feedbackStore.saveFeedback({
+        thread_id: activity.conversation.id,
+        user_id: activity.from.id,
+        question,
+        answer,
+        reaction: "like",
+        comment: `Auto-tagged from signal: ${signal}`
+      });
+
+      console.log(`[Auto-Feedback] Tagged previous response as helpful due to signal: ${signal}`);
+    }
+  }
+ 
   try {
+
+    const sanitizedMessages = messages.filter(
+      m => typeof m.text === "string" && m.text.trim().length > 0
+    ).map(m => ({
+      role: m.role,
+      content: m.text.trim()
+    }));    
+
     const prompt = new ChatPrompt({
-      messages,
-      instructions,
+      messages: sanitizedMessages,
+      instructions: instructionsWithExamples,
       model: new OpenAIChatModel({
         model: config.azureOpenAIDeploymentName,
         apiKey: config.azureOpenAIKey,
@@ -210,6 +263,24 @@ app.on("message", async ({ send, stream, activity }) => {
         .addAiGenerated()
         .addFeedback();
       await send(responseActivity);
+
+      // Log engagement for 1:1 for improvement analysis
+      feedbackStore.logEngagement({
+        thread_id: conversationKey,
+        user_id: activity.from.id,
+        user_message: activity.text,
+        bot_response: response.content,
+        signal: "initial"
+      });
+
+      // Update memory
+      if (activity.text?.trim()) {
+        messages.push({ role: "user", text: activity.text.trim() });
+      }
+      if (response.content?.trim()) {
+        messages.push({ role: "assistant", text: response.content.trim() });
+      }
+
     } else {
       const response = await prompt.send(activity.text, {
         ...sendOptions,
@@ -223,8 +294,28 @@ app.on("message", async ({ send, stream, activity }) => {
       );
       // We wrap the final response with an AI Generated indicator
       stream.emit(new MessageActivity().addAiGenerated().addFeedback());
+
+      // Log engagement for 1:1 for improvement analysis
+      feedbackStore.logEngagement({
+        thread_id: conversationKey,
+        user_id: activity.from.id,
+        user_message: activity.text,
+        bot_response: response.content,
+        signal: "initial"
+      });
+
+      // Update memory
+      if (activity.text?.trim()) {
+        messages.push({ role: "user", text: activity.text.trim() });
+      }
+      if (response.content?.trim()) {
+        messages.push({ role: "assistant", text: response.content.trim() });
+      }
     }
+    
+    // Save updated conversation history
     storage.set(conversationKey, messages);
+
   } catch (error) {
     console.error(error);
     await send("The agent encountered an error or bug.");
@@ -235,8 +326,21 @@ app.on("message", async ({ send, stream, activity }) => {
 });
 
 app.on("message.submit.feedback", async ({ activity }) => {
+
+  const { reaction, feedback: comment } = activity.value.actionValue;
+  const threadId = activity.conversation.id;
+  const userId = activity.from.id;
+  const conversationKey = `${threadId}/${userId}`;
+
+  const messages = storage.get(conversationKey) || [];
+  const question = [...messages].reverse().find(m => m.role === "user")?.text ?? "";
+  const answer = [...messages].reverse().find(m => m.role === "assistant")?.text ?? "";
+
+  feedbackStore.saveFeedback({ thread_id: threadId, user_id: userId, question, answer, reaction, comment });
+  console.log(`[Feedback] Saved for ${userId}: ${reaction} - ${comment}`);
+
   //add custom feedback process logic here
-  console.log("Your feedback is " + JSON.stringify(activity.value));
+  //console.log("Your feedback is " + JSON.stringify(activity.value));
 });
 
 export default app;
