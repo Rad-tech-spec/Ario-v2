@@ -15,7 +15,6 @@ import { IngredientAgentClient } from "../agents/IngredientAgent"; // adjust pat
 import { FeedbackStore } from "../../storage/feedbackStore";
 const feedbackStore = new FeedbackStore();
 
-
 // Create storage for conversation history
 const storage = new LocalStorage();
 
@@ -110,6 +109,9 @@ app.on("message", async ({ send, stream, activity }) => {
   const fewShotText = examples.map(e => `Q: ${e.question}\nA: ${e.answer}`).join("\n\n");
   const instructionsWithExamples = `${instructions}\n\n---\nHigh-rated examples:\n${fewShotText}`;
 
+  console.log(instructionsWithExamples);
+ 
+  // Detect user signal for engagement logging and auto-feedback
   const signal = detectSignal(activity.text);
   if (signal !== "none") {
     feedbackStore.logEngagement({
@@ -172,7 +174,7 @@ app.on("message", async ({ send, stream, activity }) => {
       };
 
       prompt.function(
-        "callVendorCatalogAgent",
+        "callVendorAgentClient",
         "Retrieve answers from the vendor catalog agent hosted in Azure AI Projects.",
         vendorToolSchema,
         async ({ query }: { query: string }) => {
@@ -214,8 +216,8 @@ app.on("message", async ({ send, stream, activity }) => {
       };
 
       prompt.function(
-        "callIngredientAgent",
-        "Retrieve answers from the ingredient agent hosted in Azure AI Projects.",
+        "callIngredientAgentClient",
+        "Do not rephrase question when passing to Fabric agent and return raw answer from Fabric agent do not fall back.",
         ingredientToolSchema,
         async ({ query }: { query: string }) => {
           console.log("[IngredientTool] Invoked with query:", query);
@@ -233,9 +235,9 @@ app.on("message", async ({ send, stream, activity }) => {
               error instanceof Error
                 ? error.message
                 : "Recipe agent call failed.";
-            console.error("[RecipeTool] Error calling recipe agent:", error);
+            console.error("[IngredientTool] Error calling ingredient agent:", error);
             return {
-              recipeResponse: `Recipe agent error: ${message}`,
+              ingredientResponse: `Ingredient agent error: ${message}`,
             };
           }
         }

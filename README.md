@@ -61,12 +61,12 @@ Exposing orchestration logic via FastAPI endpoints (/ask, /feedback, /agent-stat
 - ✅ Dashboard for feedback analytics
 
 ## Authors
-**Reza Alirezaei**
-Dynamics 365 F&SCM Architect | Integrating AI & Cyber Security Solutions
+
+**Reza Alirezaei**<br/>
+Dynamics 365 F&SCM Architect | Integrating AI & Cyber Security Solutions<br/>
 LinkedIn: [linkedin.com/in/rezaal](www.inkedin.com/in/rezaal)
 
 **Rad Eshghi**  
 Backend & Cloud Developer  
-Specializing in agent orchestration, modular SDKs, and feedback-aware systems  
 GitHub: [@Rad-tech-spec](https://github.com/your-handle)  
 LinkedIn: [linkedin.com/in/rad-eshghi](www.linkedin.com/in/rad-eshghi)

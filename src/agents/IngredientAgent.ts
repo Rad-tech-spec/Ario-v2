@@ -20,6 +20,7 @@ export class IngredientAgentClient {
   // Pattern A: explicit thread + message + run (SDK polls for you)
   async run(query: string): Promise<string> {
     const thread = await this.client.threads.create();
+    console.log(`[IngredientAgent] query: ${query}, threadId: ${thread.id}`);
     await this.client.messages.create(thread.id, "user", query);
     
     // Polling handled by SDK
