@@ -1,31 +1,34 @@
 import { App } from "@microsoft/teams.apps";
-import { ChatPrompt, Schema } from "@microsoft/teams.ai";
+import { ChatPrompt } from "@microsoft/teams.ai";
 import { LocalStorage } from "@microsoft/teams.common";
 import { OpenAIChatModel } from "@microsoft/teams.openai";
 import { MessageActivity, TokenCredentials } from "@microsoft/teams.api";
-import {
-  ManagedIdentityCredential,
-  DefaultAzureCredential,
-} from "@azure/identity";
-import * as fs from "fs";
-import * as path from "path";
+import { DefaultAzureCredential } from "@azure/identity";
 import config from "../config";
 import { VendorAgentClient } from "../agents/vendorAgent";
 import { IngredientAgentClient } from "../agents/IngredientAgent"; // adjust path if needed
-import { FeedbackStore } from "../../storage/feedbackStore";
-const feedbackStore = new FeedbackStore();
+import {
+  createTokenFactory,
+  detectSignal,
+  loadInstructionsFromFile,
+  sanitizeMessages,
+} from "./utils";
+import {
+  registerIngredientTool,
+  registerVendorTool,
+} from "./tools";
+import {
+  buildInstructionsWithFeedbackExamples,
+  handleDetectedSignal,
+  logInitialEngagement,
+  saveFeedbackSubmission,
+} from "./feedback";
 
 // Create storage for conversation history
 const storage = new LocalStorage();
 
-// Load instructions from file on initialization
-function loadInstructions(): string {
-  const instructionsFilePath = path.join(__dirname, "instructions.txt");
-  return fs.readFileSync(instructionsFilePath, "utf-8").trim();
-}
-
 // Load instructions once at startup
-const instructions = loadInstructions();
+const instructions = loadInstructionsFromFile(__dirname);
 
 //Passing vendor crredentials
 // Use isAzureHosted to determine if running in Azure with (excludeManagedIdentityCredential)
@@ -38,27 +41,10 @@ const credential = new DefaultAzureCredential({
   managedIdentityClientId: process.env.CLIENT_ID,
 });
 
-// Generate an access token whenever the bot/agent needs to call another Azure service securely using Managed Identity
-const createTokenFactory = () => {
-  return async (
-    scope: string | string[],
-    tenantId?: string
-  ): Promise<string> => {
-    const managedIdentityCredential = new ManagedIdentityCredential({
-      clientId: process.env.CLIENT_ID,
-    });
-    const scopes = Array.isArray(scope) ? scope : [scope];
-    const tokenResponse = await managedIdentityCredential.getToken(scopes, {
-      tenantId: tenantId,
-    });
-    return tokenResponse.token;
-  };
-};
-
 // Configure authentication using TokenCredentials
 const tokenCredentials: TokenCredentials = {
   clientId: process.env.CLIENT_ID || "",
-  token: createTokenFactory(),
+  token: createTokenFactory(process.env.CLIENT_ID),
 };
 
 const credentialOptions =
@@ -89,15 +75,6 @@ try {
   console.warn("[IngredientAgent] Initialization skipped:", error);
 }
 
-// Simple signal detection function
-function detectSignal(userText: string): "thanks" | "repeat" | "follow-up" | "none" {
-  const lower = userText.toLowerCase();
-  if (lower.includes("thanks") || lower.includes("thank you")) return "thanks";
-  if (lower.includes("again") || lower.includes("same")) return "repeat";
-  if (lower.length > 20) return "follow-up"; // crude heuristic
-  return "none";
-}
-
 // Handle incoming messages
 app.on("message", async ({ send, stream, activity }) => {
   //Get conversation history
@@ -105,49 +82,26 @@ app.on("message", async ({ send, stream, activity }) => {
   const messages = storage.get(conversationKey) || [];
 
   // Integrate high-rated examples into instructions
-  const examples = feedbackStore.getHighRatedExamples(activity.from.id);
-  const fewShotText = examples.map(e => `Q: ${e.question}\nA: ${e.answer}`).join("\n\n");
-  const instructionsWithExamples = `${instructions}\n\n---\nHigh-rated examples:\n${fewShotText}`;
+  const instructionsWithExamples = buildInstructionsWithFeedbackExamples(
+    activity.from.id,
+    instructions
+  );
 
   console.log(instructionsWithExamples);
  
   // Detect user signal for engagement logging and auto-feedback
   const signal = detectSignal(activity.text);
-  if (signal !== "none") {
-    feedbackStore.logEngagement({
-      thread_id: conversationKey,
-      user_id: activity.from.id,
-      user_message: activity.text,
-      bot_response: "", // optional
-      signal
-    });
-
-    if (signal === "thanks") {
-      const messages = storage.get(conversationKey) || [];
-      const question = [...messages].reverse().find(m => m.role === "user")?.text ?? "";
-      const answer = [...messages].reverse().find(m => m.role === "assistant")?.text ?? "";
-
-      feedbackStore.saveFeedback({
-        thread_id: activity.conversation.id,
-        user_id: activity.from.id,
-        question,
-        answer,
-        reaction: "like",
-        comment: `Auto-tagged from signal: ${signal}`
-      });
-
-      console.log(`[Auto-Feedback] Tagged previous response as helpful due to signal: ${signal}`);
-    }
-  }
+  handleDetectedSignal({
+    signal,
+    conversationKey,
+    conversationId: activity.conversation.id,
+    userId: activity.from.id,
+    userMessage: activity.text,
+    messages,
+  });
  
   try {
-
-    const sanitizedMessages = messages.filter(
-      m => typeof m.text === "string" && m.text.trim().length > 0
-    ).map(m => ({
-      role: m.role,
-      content: m.text.trim()
-    }));    
+    const sanitizedMessages = sanitizeMessages(messages);
 
     const prompt = new ChatPrompt({
       messages: sanitizedMessages,
@@ -161,87 +115,11 @@ app.on("message", async ({ send, stream, activity }) => {
     });
 
     if (vendorAgent) {
-      const vendorToolSchema: Schema = {
-        type: "object",
-        properties: {
-          query: {
-            type: "string",
-            description:
-              "Full user request that relates to vendor catalog discovery or vendor information.",
-          },
-        },
-        required: ["query"],
-      };
-
-      prompt.function(
-        "callVendorAgentClient",
-        "Retrieve answers from the vendor catalog agent hosted in Azure AI Projects.",
-        vendorToolSchema,
-        async ({ query }: { query: string }) => {
-          console.log("[VendorTool] Invoked with query:", query);
-          try {
-            const vendorResponse = await vendorAgent!.run(query);
-            console.log(
-              "[VendorTool] Response from vendor agent:",
-              vendorResponse
-            );
-            return {
-              vendorResponse,
-            };
-          } catch (error) {
-            const message =
-              error instanceof Error
-                ? error.message
-                : "Vendor agent call failed.";
-            console.error("[VendorTool] Error calling vendor agent:", error);
-            return {
-              vendorResponse: `Vendor agent error: ${message}`,
-            };
-          }
-        }
-      );
+      registerVendorTool(prompt, vendorAgent);
     }
 
     if (ingredientAgent) {
-      const ingredientToolSchema: Schema = {
-        type: "object",
-        properties: {
-          query: {
-            type: "string",
-            description:
-              "Full user request related to recipe or ingredient cost analysis.",
-          },
-        },
-        required: ["query"],
-      };
-
-      prompt.function(
-        "callIngredientAgentClient",
-        "Do not rephrase question when passing to Fabric agent and return raw answer from Fabric agent do not fall back.",
-        ingredientToolSchema,
-        async ({ query }: { query: string }) => {
-          console.log("[IngredientTool] Invoked with query:", query);
-          try {
-            const ingredientResponse = await ingredientAgent.run(query);
-            console.log(
-              "[IngredientTool] Response from ingredient agent:",
-              ingredientResponse
-            );
-            return {
-              ingredientResponse,
-            };
-          } catch (error) {
-            const message =
-              error instanceof Error
-                ? error.message
-                : "Recipe agent call failed.";
-            console.error("[IngredientTool] Error calling ingredient agent:", error);
-            return {
-              ingredientResponse: `Ingredient agent error: ${message}`,
-            };
-          }
-        }
-      );
+      registerIngredientTool(prompt, ingredientAgent);
     }
 
     const sendOptions = {
@@ -267,12 +145,11 @@ app.on("message", async ({ send, stream, activity }) => {
       await send(responseActivity);
 
       // Log engagement for 1:1 for improvement analysis
-      feedbackStore.logEngagement({
-        thread_id: conversationKey,
-        user_id: activity.from.id,
-        user_message: activity.text,
-        bot_response: response.content,
-        signal: "initial"
+      logInitialEngagement({
+        conversationKey,
+        userId: activity.from.id,
+        userMessage: activity.text,
+        botResponse: response.content,
       });
 
       // Update memory
@@ -298,12 +175,11 @@ app.on("message", async ({ send, stream, activity }) => {
       stream.emit(new MessageActivity().addAiGenerated().addFeedback());
 
       // Log engagement for 1:1 for improvement analysis
-      feedbackStore.logEngagement({
-        thread_id: conversationKey,
-        user_id: activity.from.id,
-        user_message: activity.text,
-        bot_response: response.content,
-        signal: "initial"
+      logInitialEngagement({
+        conversationKey,
+        userId: activity.from.id,
+        userMessage: activity.text,
+        botResponse: response.content,
       });
 
       // Update memory
@@ -335,11 +211,14 @@ app.on("message.submit.feedback", async ({ activity }) => {
   const conversationKey = `${threadId}/${userId}`;
 
   const messages = storage.get(conversationKey) || [];
-  const question = [...messages].reverse().find(m => m.role === "user")?.text ?? "";
-  const answer = [...messages].reverse().find(m => m.role === "assistant")?.text ?? "";
 
-  feedbackStore.saveFeedback({ thread_id: threadId, user_id: userId, question, answer, reaction, comment });
-  console.log(`[Feedback] Saved for ${userId}: ${reaction} - ${comment}`);
+  saveFeedbackSubmission({
+    threadId,
+    userId,
+    reaction,
+    comment,
+    messages,
+  });
 
   //add custom feedback process logic here
   //console.log("Your feedback is " + JSON.stringify(activity.value));

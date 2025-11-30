@@ -2,36 +2,6 @@
 import { AgentsClient } from "@azure/ai-agents";
 import { TokenCredential } from "@azure/core-auth";
 
-<<<<<<< ours
-=======
-export type AgentCitation =
-  | {
-      index: number;
-      type: "url_citation";
-      text?: string;
-      title?: string;
-      url?: string;
-    }
-  | {
-      index: number;
-      type: "file_citation";
-      text?: string;
-      quote?: string;
-      fileId?: string;
-    }
-  | {
-      index: number;
-      type: "file_path";
-      text?: string;
-      fileId?: string;
-    };
-
-export interface IngredientAgentResult {
-  text: string;
-  citations: AgentCitation[];
-}
-
->>>>>>> theirs
 export class IngredientAgentClient {
   private client: AgentsClient;
   private agentId: string;
@@ -84,71 +54,6 @@ export class IngredientAgentClient {
         return text?.text?.value ?? "[No text in assistant message]";
       }
     }
-<<<<<<< ours
     return "[No assistant message returned]";
-=======
-    return { text: "[No assistant message returned]", citations: [] };
-  }
-
-  private extractTextBlock(message: any): IngredientAgentResult | undefined {
-    const textBlock = (message?.content ?? []).find(
-      (c: any) => c?.type === "text"
-    );
-    if (!textBlock?.text) {
-      return undefined;
-    }
-
-    const text = typeof textBlock.text.value === "string"
-      ? textBlock.text.value
-      : "[No text in assistant message]";
-    const citations = this.mapAnnotations(textBlock.text.annotations);
-    return { text, citations };
-  }
-
-  private mapAnnotations(annotations: any): AgentCitation[] {
-    if (!Array.isArray(annotations)) {
-      return [];
-    }
-
-    const mapped = annotations
-      .map((annotation, idx) => {
-        if (!annotation || typeof annotation !== "object") {
-          return undefined;
-        }
-
-        const base = {
-          index: idx + 1,
-          text:
-            typeof annotation.text === "string" ? annotation.text.trim() : undefined,
-        };
-
-        switch (annotation.type) {
-          case "url_citation":
-            return {
-              ...base,
-              type: "url_citation" as const,
-              title: annotation.urlCitation?.title,
-              url: annotation.urlCitation?.url,
-            };
-          case "file_citation":
-            return {
-              ...base,
-              type: "file_citation" as const,
-              quote: annotation.fileCitation?.quote,
-              fileId: annotation.fileCitation?.fileId,
-            };
-          case "file_path":
-            return {
-              ...base,
-              type: "file_path" as const,
-              fileId: annotation.filePath?.fileId,
-            };
-          default:
-            return undefined;
-        }
-      });
-
-    return mapped.filter(Boolean) as AgentCitation[];
->>>>>>> theirs
   }
 }
