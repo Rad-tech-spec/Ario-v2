@@ -122,7 +122,7 @@ app.on("message", async ({ send, stream, activity }) => {
       signal
     });
 
-    if (signal === "thanks" || signal === "follow-up") {
+    if (signal === "thanks") {
       const messages = storage.get(conversationKey) || [];
       const question = [...messages].reverse().find(m => m.role === "user")?.text ?? "";
       const answer = [...messages].reverse().find(m => m.role === "assistant")?.text ?? "";
