@@ -51,7 +51,7 @@ Tracks implicit engagement signals (e.g., follow-ups, “thanks”) and auto-tag
     - Retrieval of high-rated examples for prompt injection
 - [x] Retrieval-Augmented Generation (Implemented)
 Future integration with vector-based RAG pipelines to enable grounded answers from vendor catalogs, ingredient databases, or internal documentation.
-- [ ] FastAPI Integration (Planned)
+- [X] FastAPI Integration 
 Exposing orchestration logic via FastAPI endpoints (/ask, /feedback, /agent-status) for external systems, dashboards, or mobile clients.
 
 ## Future Enhancements
@@ -67,6 +67,6 @@ Dynamics 365 F&SCM Architect | Integrating AI & Cyber Security Solutions<br/>
 LinkedIn: [linkedin.com/in/rezaal](www.inkedin.com/in/rezaal)
 
 **Rad Eshghi**  
-Backend & Cloud Developer  
+Backend & AI Engineer  
 GitHub: [@Rad-tech-spec](https://github.com/your-handle)  
 LinkedIn: [linkedin.com/in/rad-eshghi](www.linkedin.com/in/rad-eshghi)
